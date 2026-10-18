@@ -1,49 +1,79 @@
 
 import numpy as np
 
-rng = np.random.default_rng(42)
 
-# Original information
-num_bits = 10000
-bits = rng.integers(0, 2, num_bits)
+def run_fec_awgn(num_bits=10000, esn0_db=0):
+    """
+    Simulate Repetition-3 FEC with BPSK over an AWGN channel.
+    Return error counts and bit error rates.
+    """
 
-# Repetition-3 FEC encoding
-encoded_bits = np.repeat(bits, 3)
+    # Validate inputs
+    num_bits = int(num_bits)
+    esn0_db = float(esn0_db)
 
-# BPSK mapping
-symbols = 2 * encoded_bits - 1
+    if num_bits <= 0:
+        raise ValueError("num_bits must be greater than zero.")
 
-# Set noise condition using Es/N0 for each coded symbol
-esn0_db = 0
-esn0_linear = 10 ** (esn0_db / 10)
+    if not np.isfinite(esn0_db):
+        raise ValueError("esn0_db must be a finite number.")
 
-noise_std = np.sqrt(1 / (2 * esn0_linear))
+    rng = np.random.default_rng()
 
-# AWGN channel
-noise = rng.normal(0, noise_std, len(symbols))
-received_symbols = symbols + noise
+    # Step 1: Generate original information bits
+    bits = rng.integers(0, 2, size=num_bits)
 
-# Hard-decision BPSK demodulation
-received_bits = (received_symbols > 0).astype(int)
+    # Step 2: Repetition-3 FEC encoding
+    encoded_bits = np.repeat(bits, 3)
 
-# FEC majority-vote decoder
-groups = received_bits.reshape(-1, 3)
-decoded_bits = (groups.sum(axis=1) >= 2).astype(int)
+    # Step 3: BPSK modulation
+    symbols = 2 * encoded_bits - 1
 
-# Calculate error rates
-coded_errors = np.count_nonzero(
-    encoded_bits != received_bits
-)
-decoded_errors = np.count_nonzero(
-    bits != decoded_bits
-)
+    # Step 4: Convert Es/N0 from dB to linear scale
+    esn0_linear = 10 ** (esn0_db / 10)
 
-coded_ber = coded_errors / len(encoded_bits)
-decoded_ber = decoded_errors / num_bits
+    # Step 5: Calculate AWGN standard deviation
+    noise_std = np.sqrt(1 / (2 * esn0_linear))
 
-print("Original information bits:", num_bits)
-print("Transmitted coded bits:", len(encoded_bits))
-print("Es/N0:", esn0_db, "dB")
-print("Coded-bit error rate:", coded_ber)
-print("Decoded information-bit error rate:", decoded_ber)
-print("Decoded information-bit errors:", decoded_errors)
+    # Step 6: Transmit symbols through AWGN channel
+    noise = rng.normal(0, noise_std, size=len(symbols))
+    received_symbols = symbols + noise
+
+    # Step 7: Hard-decision BPSK demodulation
+    received_bits = (received_symbols > 0).astype(int)
+
+    # Step 8: Group received bits into sets of 3
+    groups = received_bits.reshape(-1, 3)
+
+    # Step 9: Majority-vote FEC decoding
+    decoded_bits = (groups.sum(axis=1) >= 2).astype(int)
+
+    # Step 10: Count bit errors
+    coded_errors = np.count_nonzero(
+        encoded_bits != received_bits
+    )
+
+    decoded_errors = np.count_nonzero(
+        bits != decoded_bits
+    )
+
+    # Step 11: Calculate bit error rates
+    coded_ber = coded_errors / len(encoded_bits)
+    decoded_ber = decoded_errors / num_bits
+
+    # Step 12: Return results
+    return {
+        "num_bits": num_bits,
+        "coded_bits": len(encoded_bits),
+        "coded_errors": int(coded_errors),
+        "decoded_errors": int(decoded_errors),
+        "coded_ber": float(coded_ber),
+        "decoded_ber": float(decoded_ber)
+    }
+
+
+if __name__ == "__main__":
+    results = run_fec_awgn()
+
+    for name, value in results.items():
+        print(f"{name}: {value}")
