@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from modules.fec_awgn_experiment import run_fec_awgn
+from modules.ber_snr_analysis_new import run_ber_snr_analysis
 
 
 # ============================================================
@@ -92,9 +93,7 @@ if selected_module == "Digital Communication":
     ):
 
         # Generate random information bits
-        bits = np.random.randint(
-            0, 2, number_of_bits
-        )
+        bits = np.random.randint(0, 2, number_of_bits)
 
         # BPSK modulation
         symbols = 2 * bits - 1
@@ -103,9 +102,7 @@ if selected_module == "Digital Communication":
         ebn0_linear = 10 ** (ebn0_db / 10)
 
         # Calculate AWGN standard deviation
-        noise_std = np.sqrt(
-            1 / (2 * ebn0_linear)
-        )
+        noise_std = np.sqrt(1 / (2 * ebn0_linear))
 
         # Add Gaussian noise
         noise = np.random.normal(
@@ -117,44 +114,24 @@ if selected_module == "Digital Communication":
         received = symbols + noise
 
         # Hard-decision BPSK demodulation
-        detected_bits = (
-            received > 0
-        ).astype(int)
+        detected_bits = (received > 0).astype(int)
 
         # Calculate errors and BER
-        errors = np.count_nonzero(
-            bits != detected_bits
-        )
-
+        errors = np.count_nonzero(bits != detected_bits)
         ber = errors / number_of_bits
 
         st.subheader("BPSK Simulation Results")
 
         col1, col2, col3 = st.columns(3)
 
-        col1.metric(
-            "Transmitted Bits",
-            number_of_bits
-        )
+        col1.metric("Transmitted Bits", number_of_bits)
+        col2.metric("Bit Errors", int(errors))
+        col3.metric("BER", f"{ber:.6f}")
 
-        col2.metric(
-            "Bit Errors",
-            errors
-        )
+        # Plot first 30 symbols
+        sample_count = min(30, number_of_bits)
 
-        col3.metric(
-            "BER",
-            f"{ber:.6f}"
-        )
-
-        # Plot the first 30 symbols
-        sample_count = min(
-            30, number_of_bits
-        )
-
-        fig, ax = plt.subplots(
-            figsize=(10, 4)
-        )
+        fig, ax = plt.subplots(figsize=(10, 4))
 
         ax.plot(
             symbols[:sample_count],
@@ -175,13 +152,9 @@ if selected_module == "Digital Communication":
             label="Decision Boundary"
         )
 
-        ax.set_title(
-            "BPSK Transmission Through AWGN"
-        )
-
+        ax.set_title("BPSK Transmission Through AWGN")
         ax.set_xlabel("Symbol Index")
         ax.set_ylabel("Amplitude")
-
         ax.legend()
         ax.grid(True)
 
@@ -225,7 +198,6 @@ if selected_module == "Digital Communication":
         key="run_fec_awgn_button"
     ):
 
-        # Call the experiment from the modules folder
         results = run_fec_awgn(
             num_bits=fec_bits,
             esn0_db=fec_esn0
@@ -265,10 +237,8 @@ if selected_module == "Digital Communication":
             results["decoded_errors"]
         )
 
-        # Visual comparison of BER
-        fig, ax = plt.subplots(
-            figsize=(8, 4)
-        )
+        # BER comparison chart
+        fig, ax = plt.subplots(figsize=(8, 4))
 
         ax.bar(
             ["Before FEC Decoding", "After FEC Decoding"],
@@ -281,8 +251,8 @@ if selected_module == "Digital Communication":
         ax.set_title(
             "BER Comparison: Before vs After FEC Decoding"
         )
-
         ax.set_ylabel("Bit Error Rate")
+
         ax.set_ylim(
             0,
             max(
@@ -292,11 +262,7 @@ if selected_module == "Digital Communication":
             ) * 1.2
         )
 
-        ax.grid(
-            True,
-            axis="y",
-            alpha=0.3
-        )
+        ax.grid(True, axis="y", alpha=0.3)
 
         st.pyplot(fig)
         plt.close(fig)
@@ -327,7 +293,6 @@ if selected_module == "Digital Communication":
         key="fec_run_button"
     ):
 
-        # Validate binary input
         if not message or any(
             bit not in "01" for bit in message
         ):
@@ -336,18 +301,15 @@ if selected_module == "Digital Communication":
             )
 
         else:
-
-            # Convert string to binary array
+            # Convert binary message to NumPy array
             original_bits = np.array(
                 [int(bit) for bit in message]
             )
 
-            # Repetition-3 FEC encoding
-            encoded_bits = np.repeat(
-                original_bits, 3
-            )
+            # Repetition-3 encoding
+            encoded_bits = np.repeat(original_bits, 3)
 
-            # Introduce one error per group
+            # Introduce one bit error in every group
             received_bits = encoded_bits.copy()
 
             error_positions = np.arange(
@@ -359,9 +321,7 @@ if selected_module == "Digital Communication":
             received_bits[error_positions] ^= 1
 
             # Majority-vote decoding
-            groups = received_bits.reshape(
-                -1, 3
-            )
+            groups = received_bits.reshape(-1, 3)
 
             decoded_bits = (
                 groups.sum(axis=1) >= 2
@@ -376,13 +336,9 @@ if selected_module == "Digital Communication":
                 original_bits != decoded_bits
             )
 
-            # Display results
             st.subheader("FEC Demonstration Results")
 
-            st.write(
-                "Original message:",
-                message
-            )
+            st.write("Original message:", message)
 
             st.write(
                 "Encoded bits:",
@@ -394,8 +350,6 @@ if selected_module == "Digital Communication":
                 "".join(map(str, received_bits))
             )
 
-            
-
             st.write(
                 "Decoded message:",
                 "".join(map(str, decoded_bits))
@@ -405,13 +359,93 @@ if selected_module == "Digital Communication":
 
             col1.metric(
                 "Coded Bit Errors",
-                errors_before
+                int(errors_before)
             )
 
             col2.metric(
                 "Errors After FEC",
-                errors_after
+                int(errors_after)
             )
+
+    st.divider()
+
+    # ========================================================
+    # EXPERIMENT 4: BER VS SNR ANALYSIS
+    # ========================================================
+
+    st.subheader("Experiment 4: BER vs SNR Analysis")
+
+    st.write(
+        "Analyze how Bit Error Rate changes as Eb/N0 "
+        "increases for BPSK communication over AWGN."
+    )
+
+    snr_bits = st.slider(
+        "Number of bits for BER analysis",
+        min_value=10000,
+        max_value=500000,
+        value=100000,
+        step=10000,
+        key="ber_snr_bits"
+    )
+
+    if st.button(
+        "Run BER vs SNR Analysis",
+        key="run_ber_snr_button"
+    ):
+
+        # Run simulation from the modules folder
+        snr_values, ber_values = run_ber_snr_analysis(
+            num_bits=snr_bits
+        )
+
+        st.subheader("BER vs Eb/N0 Results")
+
+        # Display numerical results
+        for snr, ber in zip(snr_values, ber_values):
+            st.write(
+                f"Eb/N0: {snr} dB | BER: {ber:.6f}"
+            )
+
+        # Convert results for plotting
+        snr_array = np.asarray(snr_values, dtype=float)
+        ber_array = np.asarray(ber_values, dtype=float)
+
+        # A logarithmic axis cannot display zero BER
+        positive_mask = ber_array > 0
+
+        fig, ax = plt.subplots(figsize=(9, 5))
+
+        if np.any(positive_mask):
+            ax.semilogy(
+                snr_array[positive_mask],
+                ber_array[positive_mask],
+                "o-",
+                label="Simulated BPSK BER"
+            )
+
+            ax.legend()
+
+        else:
+            st.warning(
+                "No bit errors were observed at the "
+                "selected SNR values. Try increasing "
+                "the number of bits."
+            )
+
+        ax.set_title("BER vs Eb/N0 for BPSK over AWGN")
+        ax.set_xlabel("Eb/N0 (dB)")
+        ax.set_ylabel("Bit Error Rate (BER)")
+        ax.grid(True, which="both", alpha=0.3)
+
+        st.pyplot(fig)
+        plt.close(fig)
+
+        st.caption(
+            "Zero observed BER values are omitted from "
+            "the logarithmic plot because log(0) "
+            "is undefined."
+        )
 
 
 # ============================================================
@@ -422,3 +456,4 @@ else:
     st.info(
         f"{selected_module} is currently under development."
     )
+ 
