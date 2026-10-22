@@ -85,7 +85,45 @@ def calculate_snr(
 
 
 # ============================================================
-# MAIN PROGRAM: RUN ALL FOUR EXPERIMENTS
+# FEATURE: LINK QUALITY INTERPRETATION
+# ============================================================
+
+def interpret_link_quality(snr_db):
+    """
+    Educational SNR classification.
+    These thresholds are not aviation standards.
+    """
+
+    if snr_db >= 20:
+        return "High SNR - Strong signal relative to noise"
+
+    elif snr_db >= 10:
+        return "Moderate SNR - Signal above noise"
+
+    elif snr_db >= 0:
+        return "Low SNR - Signal quality may be limited"
+
+    else:
+        return "Negative SNR - Noise exceeds signal power"
+
+
+# ============================================================
+# NEW FEATURE: LINK MARGIN CALCULATION
+# ============================================================
+
+def calculate_link_margin(snr_db, required_snr_db=10):
+    """
+    Calculate the SNR margin above a chosen requirement.
+
+    The required SNR is an illustrative design assumption,
+    not an official aviation communication standard.
+    """
+
+    return snr_db - required_snr_db
+
+
+# ============================================================
+# MAIN PROGRAM
 # ============================================================
 
 if __name__ == "__main__":
@@ -100,6 +138,9 @@ if __name__ == "__main__":
     bandwidth_hz = 25000
     noise_figure_db = 5
 
+    # NEW: Assumed minimum SNR requirement
+    required_snr_db = 10
+
     distances_km = [1, 5, 10, 20, 50, 100]
 
     print("AEROLINK NEPAL")
@@ -110,6 +151,7 @@ if __name__ == "__main__":
     print(f"Transmit Power: {transmit_power_dbm} dBm")
     print(f"Receiver Bandwidth: {bandwidth_hz} Hz")
     print(f"Receiver Noise Figure: {noise_figure_db} dB")
+    print(f"Required SNR: {required_snr_db} dB")
     print()
 
     # --------------------------------------------------------
@@ -120,6 +162,7 @@ if __name__ == "__main__":
     print()
 
     for distance in distances_km:
+
         fspl = calculate_fspl(
             distance,
             frequency_mhz
@@ -139,6 +182,7 @@ if __name__ == "__main__":
     print()
 
     for distance in distances_km:
+
         received_power = calculate_received_power(
             transmit_power_dbm,
             distance,
@@ -172,6 +216,7 @@ if __name__ == "__main__":
     print()
 
     for distance in distances_km:
+
         received_power = calculate_received_power(
             transmit_power_dbm,
             distance,
@@ -186,13 +231,52 @@ if __name__ == "__main__":
             noise_power_dbm
         )
 
+        quality = interpret_link_quality(snr_db)
+
         print(
             f"Distance: {distance:>3} km | "
             f"SNR: {snr_db:.2f} dB"
         )
 
+        print(f"Link Quality: {quality}")
+        print("-" * 55)
+
     # --------------------------------------------------------
-    # EXPERIMENT 4: GRAPHICAL ANALYSIS
+    # EXPERIMENT 4: LINK MARGIN ANALYSIS
+    # --------------------------------------------------------
+
+    print()
+    print("EXPERIMENT 4: LINK MARGIN ANALYSIS")
+    print()
+
+    for distance in distances_km:
+
+        received_power = calculate_received_power(
+            transmit_power_dbm,
+            distance,
+            frequency_mhz,
+            transmit_gain_dbi,
+            receive_gain_dbi,
+            additional_loss_db
+        )
+
+        snr_db = calculate_snr(
+            received_power,
+            noise_power_dbm
+        )
+
+        margin_db = calculate_link_margin(
+            snr_db,
+            required_snr_db
+        )
+
+        print(
+            f"Distance: {distance:>3} km | "
+            f"Link Margin: {margin_db:.2f} dB"
+        )
+
+    # --------------------------------------------------------
+    # EXPERIMENT 5: GRAPHICAL ANALYSIS
     # --------------------------------------------------------
 
     graph_distances = list(range(1, 101))
@@ -217,6 +301,12 @@ if __name__ == "__main__":
     graph_snr = [
         calculate_snr(power, noise_power_dbm)
         for power in graph_received_power
+    ]
+
+    # NEW: Calculate link margin for every distance
+    graph_link_margin = [
+        calculate_link_margin(snr, required_snr_db)
+        for snr in graph_snr
     ]
 
     # Graph 1: FSPL versus distance
@@ -261,5 +351,24 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
 
-    # Display all three figures
+    # Graph 4: Link margin versus distance
+    plt.figure(figsize=(9, 5))
+    plt.plot(
+        graph_distances,
+        graph_link_margin,
+        label="Link Margin"
+    )
+    plt.axhline(
+        y=0,
+        linestyle="--",
+        label="Minimum SNR Requirement"
+    )
+    plt.title("Link Margin vs Distance")
+    plt.xlabel("Distance (km)")
+    plt.ylabel("Link Margin (dB)")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+
+    # Display all four graphs
     plt.show()
