@@ -449,6 +449,250 @@ if selected_module == "Digital Communication":
 
 
 # ============================================================
+# MODULE 2: WIRELESS LINK ANALYZER
+# ============================================================
+
+elif selected_module == "Wireless Link Analyzer":
+
+    from modules.wireless_link import (
+        calculate_fspl,
+        calculate_received_power,
+        calculate_noise_power,
+        calculate_snr,
+        calculate_link_margin,
+        interpret_link_quality,
+    )
+
+    st.header("Wireless Channel Analyzer")
+
+    st.write(
+        "Explore an idealized aircraft-to-ground radio link. "
+        "Adjust radio and receiver settings to study free-space "
+        "path loss, received power, SNR, and link margin."
+    )
+
+    st.subheader("Radio Link Parameters")
+
+    distance_km = st.slider(
+        "Aircraft distance (km)",
+        min_value=1,
+        max_value=100,
+        value=10,
+        key="wireless_distance_km"
+    )
+
+    frequency_mhz = st.number_input(
+        "Operating frequency (MHz)",
+        min_value=1.0,
+        value=120.0,
+        step=1.0,
+        key="wireless_frequency_mhz"
+    )
+
+    transmit_power_dbm = st.slider(
+        "Transmit power (dBm)",
+        min_value=0,
+        max_value=50,
+        value=30,
+        key="wireless_transmit_power_dbm"
+    )
+
+    bandwidth_hz = st.number_input(
+        "Receiver noise bandwidth (Hz)",
+        min_value=1,
+        value=25000,
+        step=1000,
+        key="wireless_bandwidth_hz"
+    )
+
+    noise_figure_db = st.slider(
+        "Receiver noise figure (dB)",
+        min_value=0,
+        max_value=20,
+        value=5,
+        key="wireless_noise_figure_db"
+    )
+
+    required_snr_db = st.slider(
+        "Assumed required SNR (dB)",
+        min_value=0,
+        max_value=30,
+        value=10,
+        key="wireless_required_snr_db"
+    )
+
+    # Calculate wireless link results
+    fspl_db = calculate_fspl(
+        distance_km,
+        frequency_mhz
+    )
+
+    received_power_dbm = calculate_received_power(
+        transmit_power_dbm=transmit_power_dbm,
+        distance_km=distance_km,
+        frequency_mhz=frequency_mhz
+    )
+
+    noise_power_dbm = calculate_noise_power(
+        bandwidth_hz=bandwidth_hz,
+        noise_figure_db=noise_figure_db
+    )
+
+    snr_db = calculate_snr(
+        received_power_dbm,
+        noise_power_dbm
+    )
+
+    link_margin_db = calculate_link_margin(
+        snr_db,
+        required_snr_db
+    )
+
+    link_quality = interpret_link_quality(snr_db)
+
+    # Display results
+    st.subheader("Calculated Wireless Link Results")
+
+    col1, col2 = st.columns(2)
+
+    col1.metric(
+        "Free-space path loss",
+        f"{fspl_db:.2f} dB"
+    )
+
+    col2.metric(
+        "Received power",
+        f"{received_power_dbm:.2f} dBm"
+    )
+
+    col3, col4 = st.columns(2)
+
+    col3.metric(
+        "Signal-to-noise ratio",
+        f"{snr_db:.2f} dB"
+    )
+
+    col4.metric(
+        "SNR link margin",
+        f"{link_margin_db:.2f} dB"
+    )
+
+    st.write(
+        "Estimated receiver noise power:",
+        f"{noise_power_dbm:.2f} dBm"
+    )
+
+    st.write(
+        "Educational SNR interpretation:",
+        link_quality
+    )
+
+    if link_margin_db >= 0:
+        st.success(
+            "The assumed SNR requirement is satisfied in this model."
+        )
+    else:
+        st.warning(
+            "The assumed SNR requirement is not satisfied in this model."
+        )
+
+    st.caption(
+        "Educational free-space model: antenna gains and additional "
+        "system losses are assumed to be zero. Link-quality categories "
+        "and the required SNR are illustrative, not aviation standards."
+    )
+
+    # ========================================================
+    # WIRELESS LINK GRAPHS
+    # ========================================================
+
+    st.subheader("Wireless Link Performance vs Distance")
+
+    graph_distances = list(range(1, 101))
+
+    graph_fspl = [
+        calculate_fspl(d, frequency_mhz)
+        for d in graph_distances
+    ]
+
+    graph_received_power = [
+        calculate_received_power(
+            transmit_power_dbm,
+            d,
+            frequency_mhz
+        )
+        for d in graph_distances
+    ]
+
+    graph_snr = [
+        calculate_snr(power, noise_power_dbm)
+        for power in graph_received_power
+    ]
+
+    graph_margin = [
+        calculate_link_margin(snr, required_snr_db)
+        for snr in graph_snr
+    ]
+
+    wireless_graphs = [
+        (
+            "Free-space path loss",
+            graph_fspl,
+            "Path loss (dB)"
+        ),
+        (
+            "Received power",
+            graph_received_power,
+            "Received power (dBm)"
+        ),
+        (
+            "SNR",
+            graph_snr,
+            "SNR (dB)"
+        ),
+        (
+            "Link margin",
+            graph_margin,
+            "Margin (dB)"
+        )
+    ]
+
+    for graph_title, graph_values, y_label in wireless_graphs:
+
+        fig, ax = plt.subplots(figsize=(9, 4))
+
+        ax.plot(
+            graph_distances,
+            graph_values,
+            label=graph_title
+        )
+
+        ax.axvline(
+            distance_km,
+            linestyle="--",
+            label=f"Selected distance: {distance_km} km"
+        )
+
+        if graph_title == "Link margin":
+            ax.axhline(
+                0,
+                linestyle=":",
+                label="Zero margin"
+            )
+
+        ax.set_title(f"{graph_title} vs Distance")
+        ax.set_xlabel("Aircraft-to-ground distance (km)")
+        ax.set_ylabel(y_label)
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+
+        fig.tight_layout()
+
+        st.pyplot(fig)
+        plt.close(fig)
+
+
+# ============================================================
 # OTHER ENGINEERING MODULES
 # ============================================================
 
@@ -456,4 +700,3 @@ else:
     st.info(
         f"{selected_module} is currently under development."
     )
- 
