@@ -8,7 +8,7 @@ from modules.ber_snr_analysis_new import run_ber_snr_analysis
 
 
 # ============================================================
-# STREAMLIT PAGE CONFIGURATION
+# AEROLINK NEPAL - MAIN STREAMLIT APPLICATION
 # ============================================================
 
 st.set_page_config(
@@ -42,7 +42,8 @@ modules = [
 
 selected_module = st.selectbox(
     "Choose a module:",
-    modules
+    modules,
+    key="engineering_module_selection"
 )
 
 st.success(f"Selected Module: {selected_module}")
@@ -61,9 +62,9 @@ if selected_module == "Digital Communication":
         "Bit Error Rate, and Forward Error Correction."
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # EXPERIMENT 1: BPSK THROUGH AWGN
-    # ========================================================
+    # --------------------------------------------------------
 
     st.subheader("Experiment 1: BPSK Through AWGN")
 
@@ -92,19 +93,18 @@ if selected_module == "Digital Communication":
         key="run_bpsk_button"
     ):
 
-        # Generate random information bits
+        # Generate random bits
         bits = np.random.randint(0, 2, number_of_bits)
 
-        # BPSK modulation
+        # BPSK mapping: 0 -> -1, 1 -> +1
         symbols = 2 * bits - 1
 
-        # Convert Eb/N0 from dB to linear scale
+        # Convert Eb/N0 from dB
         ebn0_linear = 10 ** (ebn0_db / 10)
 
-        # Calculate AWGN standard deviation
+        # AWGN standard deviation
         noise_std = np.sqrt(1 / (2 * ebn0_linear))
 
-        # Add Gaussian noise
         noise = np.random.normal(
             0,
             noise_std,
@@ -113,11 +113,10 @@ if selected_module == "Digital Communication":
 
         received = symbols + noise
 
-        # Hard-decision BPSK demodulation
+        # Hard-decision demodulation
         detected_bits = (received > 0).astype(int)
 
-        # Calculate errors and BER
-        errors = np.count_nonzero(bits != detected_bits)
+        errors = int(np.count_nonzero(bits != detected_bits))
         ber = errors / number_of_bits
 
         st.subheader("BPSK Simulation Results")
@@ -125,7 +124,7 @@ if selected_module == "Digital Communication":
         col1, col2, col3 = st.columns(3)
 
         col1.metric("Transmitted Bits", number_of_bits)
-        col2.metric("Bit Errors", int(errors))
+        col2.metric("Bit Errors", errors)
         col3.metric("BER", f"{ber:.6f}")
 
         # Plot first 30 symbols
@@ -147,7 +146,6 @@ if selected_module == "Digital Communication":
 
         ax.axhline(
             0,
-            color="red",
             linestyle=":",
             label="Decision Boundary"
         )
@@ -155,25 +153,23 @@ if selected_module == "Digital Communication":
         ax.set_title("BPSK Transmission Through AWGN")
         ax.set_xlabel("Symbol Index")
         ax.set_ylabel("Amplitude")
-        ax.legend()
         ax.grid(True)
+        ax.legend()
 
         st.pyplot(fig)
         plt.close(fig)
 
     st.divider()
 
-    # ========================================================
+    # --------------------------------------------------------
     # EXPERIMENT 2: FEC PERFORMANCE UNDER AWGN
-    # ========================================================
+    # --------------------------------------------------------
 
-    st.subheader(
-        "Experiment 2: FEC Performance Under AWGN"
-    )
+    st.subheader("Experiment 2: FEC Performance Under AWGN")
 
     st.write(
-        "Simulate repetition-3 error correction "
-        "through a noisy BPSK channel."
+        "Study repetition-3 FEC coding through a noisy "
+        "BPSK communication channel."
     )
 
     fec_bits = st.slider(
@@ -237,7 +233,6 @@ if selected_module == "Digital Communication":
             results["decoded_errors"]
         )
 
-        # BER comparison chart
         fig, ax = plt.subplots(figsize=(8, 4))
 
         ax.bar(
@@ -248,11 +243,8 @@ if selected_module == "Digital Communication":
             ]
         )
 
-        ax.set_title(
-            "BER Comparison: Before vs After FEC Decoding"
-        )
+        ax.set_title("BER Before and After FEC Decoding")
         ax.set_ylabel("Bit Error Rate")
-
         ax.set_ylim(
             0,
             max(
@@ -261,21 +253,25 @@ if selected_module == "Digital Communication":
                 0.001
             ) * 1.2
         )
-
         ax.grid(True, axis="y", alpha=0.3)
 
         st.pyplot(fig)
         plt.close(fig)
 
+        st.caption(
+            "The coded-bit and decoded information-bit BER "
+            "use different denominators. This comparison "
+            "demonstrates decoding, not a fair comparison "
+            "of coded versus uncoded energy efficiency."
+        )
+
     st.divider()
 
-    # ========================================================
+    # --------------------------------------------------------
     # EXPERIMENT 3: MANUAL FEC DEMONSTRATION
-    # ========================================================
+    # --------------------------------------------------------
 
-    st.subheader(
-        "Experiment 3: Forward Error Correction (FEC)"
-    )
+    st.subheader("Experiment 3: Forward Error Correction (FEC)")
 
     st.write(
         "Demonstration of repetition-3 encoding "
@@ -293,23 +289,22 @@ if selected_module == "Digital Communication":
         key="fec_run_button"
     ):
 
-        if not message or any(
-            bit not in "01" for bit in message
-        ):
+        if not message or any(bit not in "01" for bit in message):
+
             st.error(
                 "Please enter only binary digits (0 and 1)."
             )
 
         else:
-            # Convert binary message to NumPy array
+
             original_bits = np.array(
                 [int(bit) for bit in message]
             )
 
-            # Repetition-3 encoding
+            # FEC encoding
             encoded_bits = np.repeat(original_bits, 3)
 
-            # Introduce one bit error in every group
+            # Flip one bit in every three-bit group
             received_bits = encoded_bits.copy()
 
             error_positions = np.arange(
@@ -327,14 +322,13 @@ if selected_module == "Digital Communication":
                 groups.sum(axis=1) >= 2
             ).astype(int)
 
-            # Count errors
-            errors_before = np.count_nonzero(
+            errors_before = int(np.count_nonzero(
                 encoded_bits != received_bits
-            )
+            ))
 
-            errors_after = np.count_nonzero(
+            errors_after = int(np.count_nonzero(
                 original_bits != decoded_bits
-            )
+            ))
 
             st.subheader("FEC Demonstration Results")
 
@@ -357,27 +351,20 @@ if selected_module == "Digital Communication":
 
             col1, col2 = st.columns(2)
 
-            col1.metric(
-                "Coded Bit Errors",
-                int(errors_before)
-            )
-
-            col2.metric(
-                "Errors After FEC",
-                int(errors_after)
-            )
+            col1.metric("Coded Bit Errors", errors_before)
+            col2.metric("Errors After FEC", errors_after)
 
     st.divider()
 
-    # ========================================================
+    # --------------------------------------------------------
     # EXPERIMENT 4: BER VS SNR ANALYSIS
-    # ========================================================
+    # --------------------------------------------------------
 
     st.subheader("Experiment 4: BER vs SNR Analysis")
 
     st.write(
-        "Analyze how Bit Error Rate changes as Eb/N0 "
-        "increases for BPSK communication over AWGN."
+        "Study how Bit Error Rate changes with Eb/N0 "
+        "for BPSK transmission over AWGN."
     )
 
     snr_bits = st.slider(
@@ -394,29 +381,26 @@ if selected_module == "Digital Communication":
         key="run_ber_snr_button"
     ):
 
-        # Run simulation from the modules folder
         snr_values, ber_values = run_ber_snr_analysis(
             num_bits=snr_bits
         )
 
         st.subheader("BER vs Eb/N0 Results")
 
-        # Display numerical results
         for snr, ber in zip(snr_values, ber_values):
             st.write(
                 f"Eb/N0: {snr} dB | BER: {ber:.6f}"
             )
 
-        # Convert results for plotting
         snr_array = np.asarray(snr_values, dtype=float)
         ber_array = np.asarray(ber_values, dtype=float)
 
-        # A logarithmic axis cannot display zero BER
         positive_mask = ber_array > 0
 
         fig, ax = plt.subplots(figsize=(9, 5))
 
         if np.any(positive_mask):
+
             ax.semilogy(
                 snr_array[positive_mask],
                 ber_array[positive_mask],
@@ -427,10 +411,10 @@ if selected_module == "Digital Communication":
             ax.legend()
 
         else:
+
             st.warning(
                 "No bit errors were observed at the "
-                "selected SNR values. Try increasing "
-                "the number of bits."
+                "selected SNR values."
             )
 
         ax.set_title("BER vs Eb/N0 for BPSK over AWGN")
@@ -460,15 +444,15 @@ elif selected_module == "Wireless Link Analyzer":
         calculate_noise_power,
         calculate_snr,
         calculate_link_margin,
-        interpret_link_quality,
+        interpret_link_quality
     )
 
     st.header("Wireless Channel Analyzer")
 
     st.write(
-        "Explore an idealized aircraft-to-ground radio link. "
-        "Adjust radio and receiver settings to study free-space "
-        "path loss, received power, SNR, and link margin."
+        "Explore a simulated aircraft-to-ground radio link. "
+        "Analyze free-space path loss, received power, "
+        "receiver noise, SNR and link margin."
     )
 
     st.subheader("Radio Link Parameters")
@@ -521,7 +505,10 @@ elif selected_module == "Wireless Link Analyzer":
         key="wireless_required_snr_db"
     )
 
-    # Calculate wireless link results
+    # --------------------------------------------------------
+    # WIRELESS LINK CALCULATIONS
+    # --------------------------------------------------------
+
     fspl_db = calculate_fspl(
         distance_km,
         frequency_mhz
@@ -550,7 +537,10 @@ elif selected_module == "Wireless Link Analyzer":
 
     link_quality = interpret_link_quality(snr_db)
 
-    # Display results
+    # --------------------------------------------------------
+    # WIRELESS LINK RESULTS
+    # --------------------------------------------------------
+
     st.subheader("Calculated Wireless Link Results")
 
     col1, col2 = st.columns(2)
@@ -588,23 +578,26 @@ elif selected_module == "Wireless Link Analyzer":
     )
 
     if link_margin_db >= 0:
+
         st.success(
             "The assumed SNR requirement is satisfied in this model."
         )
+
     else:
+
         st.warning(
             "The assumed SNR requirement is not satisfied in this model."
         )
 
     st.caption(
-        "Educational free-space model: antenna gains and additional "
-        "system losses are assumed to be zero. Link-quality categories "
-        "and the required SNR are illustrative, not aviation standards."
+        "This is an educational free-space model with zero "
+        "antenna gains and additional losses. The thresholds "
+        "are illustrative, not aviation communication standards."
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # WIRELESS LINK GRAPHS
-    # ========================================================
+    # --------------------------------------------------------
 
     st.subheader("Wireless Link Performance vs Distance")
 
@@ -674,6 +667,7 @@ elif selected_module == "Wireless Link Analyzer":
         )
 
         if graph_title == "Link margin":
+
             ax.axhline(
                 0,
                 linestyle=":",
@@ -693,10 +687,192 @@ elif selected_module == "Wireless Link Analyzer":
 
 
 # ============================================================
+# MODULE 3: NETWORK QUALITY MONITOR
+# ============================================================
+
+elif selected_module == "Network Monitor":
+
+    from modules.network_monitor import simulate_network
+
+    st.header("Network Quality Monitor")
+
+    st.write(
+        "Simulate data packet delivery between an airport "
+        "ground station and a monitoring center."
+    )
+
+    st.subheader("Network Simulation Settings")
+
+    # --------------------------------------------------------
+    # NETWORK INPUT PARAMETERS
+    # --------------------------------------------------------
+
+    num_packets = st.slider(
+        "Number of packets",
+        min_value=100,
+        max_value=1000,
+        value=100,
+        step=100,
+        key="network_packets"
+    )
+
+    base_latency_ms = st.slider(
+        "Base one-way latency (ms)",
+        min_value=10,
+        max_value=200,
+        value=40,
+        key="network_latency"
+    )
+
+    jitter_std_ms = st.slider(
+        "Delay variation standard deviation (ms)",
+        min_value=0,
+        max_value=100,
+        value=10,
+        key="network_jitter_std"
+    )
+
+    loss_percent = st.slider(
+        "Packet loss probability (%)",
+        min_value=0,
+        max_value=30,
+        value=2,
+        key="network_loss"
+    )
+
+    duration_seconds = st.slider(
+        "Observation duration (seconds)",
+        min_value=1,
+        max_value=60,
+        value=10,
+        key="network_duration"
+    )
+
+    packet_size_bytes = st.number_input(
+        "Packet size (bytes)",
+        min_value=1,
+        value=1000,
+        step=100,
+        key="network_packet_size"
+    )
+
+    # --------------------------------------------------------
+    # RUN NETWORK SIMULATION
+    # --------------------------------------------------------
+
+    if st.button(
+        "Run Network Simulation",
+        key="run_network_simulation"
+    ):
+
+        results = simulate_network(
+            num_packets=num_packets,
+            base_latency_ms=base_latency_ms,
+            jitter_std_ms=jitter_std_ms,
+            loss_probability=loss_percent / 100,
+            packet_size_bytes=packet_size_bytes,
+            duration_seconds=duration_seconds
+        )
+
+        st.subheader("Network Performance Results")
+
+        # ----------------------------------------------------
+        # PERFORMANCE METRICS
+        # ----------------------------------------------------
+
+        col1, col2 = st.columns(2)
+
+        col1.metric(
+            "Average Latency",
+            f"{results['average_latency_ms']:.2f} ms"
+        )
+
+        col2.metric(
+            "Jitter",
+            f"{results['jitter_ms']:.2f} ms"
+        )
+
+        col3, col4 = st.columns(2)
+
+        col3.metric(
+            "Packet Loss",
+            f"{results['packet_loss_percent']:.2f}%"
+        )
+
+        col4.metric(
+            "Throughput",
+            f"{results['throughput_mbps']:.4f} Mbps"
+        )
+
+        st.write(
+            "Packets sent:",
+            results["packets_sent"]
+        )
+
+        st.write(
+            "Packets received:",
+            results["packets_received"]
+        )
+
+        st.write(
+            "Packets lost:",
+            results["packets_lost"]
+        )
+
+        # ----------------------------------------------------
+        # PACKET DELAY GRAPH
+        # ----------------------------------------------------
+
+        st.subheader("Packet Delay Visualization")
+
+        delays = results["received_delays"]
+
+        if len(delays) > 0:
+
+            fig, ax = plt.subplots(figsize=(9, 4))
+
+            ax.plot(
+                range(1, len(delays) + 1),
+                delays,
+                label="Received Packet Delay"
+            )
+
+            ax.set_title(
+                "Simulated One-way Packet Delay"
+            )
+
+            ax.set_xlabel("Received Packet Index")
+            ax.set_ylabel("Packet Delay (ms)")
+            ax.grid(True)
+            ax.legend()
+
+            fig.tight_layout()
+
+            st.pyplot(fig)
+            plt.close(fig)
+
+        else:
+
+            st.warning(
+                "No packets were received during this simulation."
+            )
+
+        st.caption(
+            "The Network Quality Monitor generates simulated "
+            "packet delays and losses. It does not measure "
+            "real airport network traffic. Jitter is calculated "
+            "as mean absolute delay variation, and throughput "
+            "uses successfully delivered payload bits divided "
+            "by the observation duration."
+        )
+
+
+# ============================================================
 # OTHER ENGINEERING MODULES
 # ============================================================
 
 else:
+
     st.info(
         f"{selected_module} is currently under development."
     )
