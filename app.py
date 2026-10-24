@@ -1,14 +1,31 @@
 
 import streamlit as st
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from modules.fec_awgn_experiment import run_fec_awgn
 from modules.ber_snr_analysis_new import run_ber_snr_analysis
 
+from modules.wireless_link import (
+    calculate_fspl,
+    calculate_received_power,
+    calculate_noise_power,
+    calculate_snr,
+    calculate_link_margin,
+    interpret_link_quality,
+)
+
+from modules.network_monitor import simulate_network
+
+from modules.aircraft_surveillance import (
+    create_aircraft,
+    update_aircraft_position,
+)
+
 
 # ============================================================
-# AEROLINK NEPAL - MAIN STREAMLIT APPLICATION
+# AEROLINK NEPAL - MAIN APPLICATION
 # ============================================================
 
 st.set_page_config(
@@ -21,32 +38,21 @@ st.title("✈️ AeroLink Nepal")
 st.subheader(
     "Airport Communication & Surveillance Network Simulator"
 )
-
 st.info("Version 0.1 | Educational Simulation")
-st.write("Welcome to AeroLink Nepal!")
-
-
-# ============================================================
-# ENGINEERING MODULE SELECTION
-# ============================================================
-
-st.header("Engineering Modules")
 
 modules = [
     "Digital Communication",
-    "Network Monitor",
     "Wireless Link Analyzer",
+    "Network Monitor",
     "Aircraft Surveillance Simulator",
-    "Reliability and Failover"
+    "Reliability and Failover",
 ]
 
 selected_module = st.selectbox(
-    "Choose a module:",
+    "Choose an Engineering Module",
     modules,
-    key="engineering_module_selection"
+    key="main_module_selector"
 )
-
-st.success(f"Selected Module: {selected_module}")
 
 
 # ============================================================
@@ -56,101 +62,64 @@ st.success(f"Selected Module: {selected_module}")
 if selected_module == "Digital Communication":
 
     st.header("Digital Communication Simulator")
-
     st.write(
-        "Explore BPSK modulation, AWGN noise, "
-        "Bit Error Rate, and Forward Error Correction."
+        "Study BPSK, AWGN, BER and Forward Error Correction."
     )
 
     # --------------------------------------------------------
-    # EXPERIMENT 1: BPSK THROUGH AWGN
+    # EXPERIMENT 1 - BPSK AND AWGN
     # --------------------------------------------------------
 
     st.subheader("Experiment 1: BPSK Through AWGN")
 
-    number_of_bits = st.slider(
+    num_bits = st.slider(
         "Number of transmitted bits",
-        min_value=100,
-        max_value=10000,
-        value=1000,
-        step=100,
+        100, 10000, 1000, step=100,
         key="bpsk_bits"
     )
 
     ebn0_db = st.slider(
         "Eb/N0 (dB)",
-        min_value=0,
-        max_value=12,
-        value=6,
+        0, 12, 6,
         key="bpsk_ebn0"
     )
 
-    st.write("Transmitted bits:", number_of_bits)
-    st.write("Selected Eb/N0:", ebn0_db, "dB")
+    if st.button("Run BPSK Simulation", key="bpsk_run"):
 
-    if st.button(
-        "Run BPSK Simulation",
-        key="run_bpsk_button"
-    ):
-
-        # Generate random bits
-        bits = np.random.randint(0, 2, number_of_bits)
-
-        # BPSK mapping: 0 -> -1, 1 -> +1
+        bits = np.random.randint(0, 2, num_bits)
         symbols = 2 * bits - 1
 
-        # Convert Eb/N0 from dB
         ebn0_linear = 10 ** (ebn0_db / 10)
-
-        # AWGN standard deviation
         noise_std = np.sqrt(1 / (2 * ebn0_linear))
 
         noise = np.random.normal(
-            0,
-            noise_std,
-            number_of_bits
+            0, noise_std, num_bits
         )
 
         received = symbols + noise
+        detected = (received > 0).astype(int)
 
-        # Hard-decision demodulation
-        detected_bits = (received > 0).astype(int)
+        errors = int(np.count_nonzero(bits != detected))
+        ber = errors / num_bits
 
-        errors = int(np.count_nonzero(bits != detected_bits))
-        ber = errors / number_of_bits
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Transmitted Bits", num_bits)
+        c2.metric("Bit Errors", errors)
+        c3.metric("BER", f"{ber:.6f}")
 
-        st.subheader("BPSK Simulation Results")
-
-        col1, col2, col3 = st.columns(3)
-
-        col1.metric("Transmitted Bits", number_of_bits)
-        col2.metric("Bit Errors", errors)
-        col3.metric("BER", f"{ber:.6f}")
-
-        # Plot first 30 symbols
-        sample_count = min(30, number_of_bits)
-
-        fig, ax = plt.subplots(figsize=(10, 4))
+        fig, ax = plt.subplots(figsize=(9, 4))
 
         ax.plot(
-            symbols[:sample_count],
-            "o-",
-            label="Transmitted"
+            symbols[:30], "o-", label="Transmitted"
         )
-
         ax.plot(
-            received[:sample_count],
-            "x--",
-            label="Received"
+            received[:30], "x--", label="Received"
         )
-
         ax.axhline(
-            0,
-            linestyle=":",
-            label="Decision Boundary"
+            0, linestyle=":", label="Decision Boundary"
         )
 
-        ax.set_title("BPSK Transmission Through AWGN")
+        ax.set_title("BPSK Through AWGN")
         ax.set_xlabel("Symbol Index")
         ax.set_ylabel("Amplitude")
         ax.grid(True)
@@ -162,274 +131,173 @@ if selected_module == "Digital Communication":
     st.divider()
 
     # --------------------------------------------------------
-    # EXPERIMENT 2: FEC PERFORMANCE UNDER AWGN
+    # EXPERIMENT 2 - FEC UNDER AWGN
     # --------------------------------------------------------
 
-    st.subheader("Experiment 2: FEC Performance Under AWGN")
-
-    st.write(
-        "Study repetition-3 FEC coding through a noisy "
-        "BPSK communication channel."
-    )
+    st.subheader("Experiment 2: FEC Under AWGN")
 
     fec_bits = st.slider(
         "Number of information bits",
-        min_value=1000,
-        max_value=50000,
-        value=10000,
-        step=1000,
-        key="fec_awgn_bits"
+        1000, 50000, 10000, step=1000,
+        key="fec_bits"
     )
 
     fec_esn0 = st.slider(
         "Channel Es/N0 (dB)",
-        min_value=0,
-        max_value=10,
-        value=0,
-        key="fec_awgn_esn0"
+        0, 10, 0,
+        key="fec_esn0"
     )
 
-    if st.button(
-        "Run FEC + AWGN Experiment",
-        key="run_fec_awgn_button"
-    ):
+    if st.button("Run FEC + AWGN", key="fec_awgn_run"):
 
         results = run_fec_awgn(
             num_bits=fec_bits,
             esn0_db=fec_esn0
         )
 
-        st.subheader("FEC + AWGN Results")
+        c1, c2 = st.columns(2)
 
-        col1, col2 = st.columns(2)
-
-        col1.metric(
+        c1.metric(
             "Coded-Bit BER",
             f"{results['coded_ber']:.6f}"
         )
-
-        col2.metric(
+        c2.metric(
             "Decoded Information BER",
             f"{results['decoded_ber']:.6f}"
         )
 
         st.write(
-            "Original information bits:",
-            results["num_bits"]
+            "Information bits:", results["num_bits"]
         )
-
         st.write(
-            "Transmitted coded bits:",
-            results["coded_bits"]
+            "Coded bits:", results["coded_bits"]
         )
-
         st.write(
-            "Coded-bit errors:",
-            results["coded_errors"]
+            "Coded-bit errors:", results["coded_errors"]
         )
-
         st.write(
-            "Information-bit errors after FEC:",
-            results["decoded_errors"]
+            "Errors after FEC:", results["decoded_errors"]
         )
 
         fig, ax = plt.subplots(figsize=(8, 4))
-
         ax.bar(
-            ["Before FEC Decoding", "After FEC Decoding"],
-            [
-                results["coded_ber"],
-                results["decoded_ber"]
-            ]
+            ["Before decoding", "After decoding"],
+            [results["coded_ber"], results["decoded_ber"]]
         )
-
-        ax.set_title("BER Before and After FEC Decoding")
+        ax.set_title("BER Before and After FEC")
         ax.set_ylabel("Bit Error Rate")
-        ax.set_ylim(
-            0,
-            max(
-                results["coded_ber"],
-                results["decoded_ber"],
-                0.001
-            ) * 1.2
-        )
         ax.grid(True, axis="y", alpha=0.3)
 
         st.pyplot(fig)
         plt.close(fig)
 
         st.caption(
-            "The coded-bit and decoded information-bit BER "
-            "use different denominators. This comparison "
-            "demonstrates decoding, not a fair comparison "
-            "of coded versus uncoded energy efficiency."
+            "These BER measurements use different denominators "
+            "and do not establish an energy-efficiency gain."
         )
 
     st.divider()
 
     # --------------------------------------------------------
-    # EXPERIMENT 3: MANUAL FEC DEMONSTRATION
+    # EXPERIMENT 3 - MANUAL FEC
     # --------------------------------------------------------
 
-    st.subheader("Experiment 3: Forward Error Correction (FEC)")
-
-    st.write(
-        "Demonstration of repetition-3 encoding "
-        "and majority-vote decoding."
-    )
+    st.subheader("Experiment 3: Repetition-3 FEC")
 
     message = st.text_input(
-        "Enter binary information:",
+        "Enter binary information",
         value="10110",
-        key="fec_binary_message"
+        key="fec_message"
     )
 
-    if st.button(
-        "Run FEC Simulation",
-        key="fec_run_button"
-    ):
+    if st.button("Run FEC Demonstration", key="fec_demo_run"):
 
-        if not message or any(bit not in "01" for bit in message):
-
-            st.error(
-                "Please enter only binary digits (0 and 1)."
-            )
+        if not message or any(c not in "01" for c in message):
+            st.error("Enter only binary digits 0 and 1.")
 
         else:
+            original = np.array([int(c) for c in message])
+            encoded = np.repeat(original, 3)
+            received = encoded.copy()
 
-            original_bits = np.array(
-                [int(bit) for bit in message]
-            )
+            # One error per group of 3
+            received[1::3] ^= 1
 
-            # FEC encoding
-            encoded_bits = np.repeat(original_bits, 3)
-
-            # Flip one bit in every three-bit group
-            received_bits = encoded_bits.copy()
-
-            error_positions = np.arange(
-                1,
-                len(encoded_bits),
-                3
-            )
-
-            received_bits[error_positions] ^= 1
-
-            # Majority-vote decoding
-            groups = received_bits.reshape(-1, 3)
-
-            decoded_bits = (
+            groups = received.reshape(-1, 3)
+            decoded = (
                 groups.sum(axis=1) >= 2
             ).astype(int)
 
-            errors_before = int(np.count_nonzero(
-                encoded_bits != received_bits
-            ))
-
-            errors_after = int(np.count_nonzero(
-                original_bits != decoded_bits
-            ))
-
-            st.subheader("FEC Demonstration Results")
-
-            st.write("Original message:", message)
-
+            st.write("Original:", message)
             st.write(
-                "Encoded bits:",
-                "".join(map(str, encoded_bits))
+                "Encoded:", "".join(map(str, encoded))
+            )
+            st.write(
+                "Received:", "".join(map(str, received))
+            )
+            st.write(
+                "Decoded:", "".join(map(str, decoded))
             )
 
-            st.write(
-                "Received bits:",
-                "".join(map(str, received_bits))
+            c1, c2 = st.columns(2)
+            c1.metric(
+                "Coded Errors",
+                int(np.count_nonzero(encoded != received))
             )
-
-            st.write(
-                "Decoded message:",
-                "".join(map(str, decoded_bits))
+            c2.metric(
+                "Errors After FEC",
+                int(np.count_nonzero(original != decoded))
             )
-
-            col1, col2 = st.columns(2)
-
-            col1.metric("Coded Bit Errors", errors_before)
-            col2.metric("Errors After FEC", errors_after)
 
     st.divider()
 
     # --------------------------------------------------------
-    # EXPERIMENT 4: BER VS SNR ANALYSIS
+    # EXPERIMENT 4 - BER VS SNR
     # --------------------------------------------------------
 
-    st.subheader("Experiment 4: BER vs SNR Analysis")
+    st.subheader("Experiment 4: BER vs Eb/N0")
 
-    st.write(
-        "Study how Bit Error Rate changes with Eb/N0 "
-        "for BPSK transmission over AWGN."
+    analysis_bits = st.slider(
+        "Bits for BER analysis",
+        10000, 500000, 100000, step=10000,
+        key="ber_analysis_bits"
     )
 
-    snr_bits = st.slider(
-        "Number of bits for BER analysis",
-        min_value=10000,
-        max_value=500000,
-        value=100000,
-        step=10000,
-        key="ber_snr_bits"
-    )
-
-    if st.button(
-        "Run BER vs SNR Analysis",
-        key="run_ber_snr_button"
-    ):
+    if st.button("Run BER Analysis", key="ber_analysis_run"):
 
         snr_values, ber_values = run_ber_snr_analysis(
-            num_bits=snr_bits
+            num_bits=analysis_bits
         )
-
-        st.subheader("BER vs Eb/N0 Results")
 
         for snr, ber in zip(snr_values, ber_values):
             st.write(
-                f"Eb/N0: {snr} dB | BER: {ber:.6f}"
+                f"Eb/N0 = {snr} dB | BER = {ber:.6f}"
             )
 
         snr_array = np.asarray(snr_values, dtype=float)
         ber_array = np.asarray(ber_values, dtype=float)
+        valid = ber_array > 0
 
-        positive_mask = ber_array > 0
+        fig, ax = plt.subplots(figsize=(9, 4))
 
-        fig, ax = plt.subplots(figsize=(9, 5))
-
-        if np.any(positive_mask):
-
+        if np.any(valid):
             ax.semilogy(
-                snr_array[positive_mask],
-                ber_array[positive_mask],
+                snr_array[valid],
+                ber_array[valid],
                 "o-",
-                label="Simulated BPSK BER"
+                label="Simulated BER"
             )
-
             ax.legend()
-
         else:
+            st.warning("No bit errors were observed.")
 
-            st.warning(
-                "No bit errors were observed at the "
-                "selected SNR values."
-            )
-
-        ax.set_title("BER vs Eb/N0 for BPSK over AWGN")
+        ax.set_title("BER vs Eb/N0")
         ax.set_xlabel("Eb/N0 (dB)")
-        ax.set_ylabel("Bit Error Rate (BER)")
-        ax.grid(True, which="both", alpha=0.3)
+        ax.set_ylabel("BER")
+        ax.grid(True, which="both")
 
         st.pyplot(fig)
         plt.close(fig)
-
-        st.caption(
-            "Zero observed BER values are omitted from "
-            "the logarithmic plot because log(0) "
-            "is undefined."
-        )
 
 
 # ============================================================
@@ -438,249 +306,140 @@ if selected_module == "Digital Communication":
 
 elif selected_module == "Wireless Link Analyzer":
 
-    from modules.wireless_link import (
-        calculate_fspl,
-        calculate_received_power,
-        calculate_noise_power,
-        calculate_snr,
-        calculate_link_margin,
-        interpret_link_quality
-    )
-
     st.header("Wireless Channel Analyzer")
-
     st.write(
-        "Explore a simulated aircraft-to-ground radio link. "
-        "Analyze free-space path loss, received power, "
-        "receiver noise, SNR and link margin."
+        "Analyze an idealized aircraft-to-ground radio link."
     )
 
-    st.subheader("Radio Link Parameters")
-
-    distance_km = st.slider(
+    distance = st.slider(
         "Aircraft distance (km)",
-        min_value=1,
-        max_value=100,
-        value=10,
-        key="wireless_distance_km"
+        1, 100, 10,
+        key="wireless_distance"
     )
 
-    frequency_mhz = st.number_input(
-        "Operating frequency (MHz)",
+    frequency = st.number_input(
+        "Frequency (MHz)",
         min_value=1.0,
         value=120.0,
-        step=1.0,
-        key="wireless_frequency_mhz"
+        key="wireless_frequency"
     )
 
-    transmit_power_dbm = st.slider(
+    transmit_power = st.slider(
         "Transmit power (dBm)",
-        min_value=0,
-        max_value=50,
-        value=30,
-        key="wireless_transmit_power_dbm"
+        0, 50, 30,
+        key="wireless_power"
     )
 
-    bandwidth_hz = st.number_input(
-        "Receiver noise bandwidth (Hz)",
+    bandwidth = st.number_input(
+        "Receiver bandwidth (Hz)",
         min_value=1,
         value=25000,
-        step=1000,
-        key="wireless_bandwidth_hz"
+        key="wireless_bandwidth"
     )
 
-    noise_figure_db = st.slider(
-        "Receiver noise figure (dB)",
-        min_value=0,
-        max_value=20,
-        value=5,
-        key="wireless_noise_figure_db"
+    noise_figure = st.slider(
+        "Noise figure (dB)",
+        0, 20, 5,
+        key="wireless_noise_figure"
     )
 
-    required_snr_db = st.slider(
-        "Assumed required SNR (dB)",
-        min_value=0,
-        max_value=30,
-        value=10,
-        key="wireless_required_snr_db"
+    required_snr = st.slider(
+        "Required SNR (dB)",
+        0, 30, 10,
+        key="wireless_required_snr"
     )
 
-    # --------------------------------------------------------
-    # WIRELESS LINK CALCULATIONS
-    # --------------------------------------------------------
+    fspl = calculate_fspl(distance, frequency)
 
-    fspl_db = calculate_fspl(
-        distance_km,
-        frequency_mhz
+    received_power = calculate_received_power(
+        transmit_power, distance, frequency
     )
 
-    received_power_dbm = calculate_received_power(
-        transmit_power_dbm=transmit_power_dbm,
-        distance_km=distance_km,
-        frequency_mhz=frequency_mhz
+    noise_power = calculate_noise_power(
+        bandwidth, noise_figure
     )
 
-    noise_power_dbm = calculate_noise_power(
-        bandwidth_hz=bandwidth_hz,
-        noise_figure_db=noise_figure_db
+    snr = calculate_snr(received_power, noise_power)
+    margin = calculate_link_margin(snr, required_snr)
+
+    st.subheader("Wireless Link Results")
+
+    c1, c2 = st.columns(2)
+    c1.metric("FSPL", f"{fspl:.2f} dB")
+    c2.metric(
+        "Received Power", f"{received_power:.2f} dBm"
     )
 
-    snr_db = calculate_snr(
-        received_power_dbm,
-        noise_power_dbm
-    )
+    c3, c4 = st.columns(2)
+    c3.metric("SNR", f"{snr:.2f} dB")
+    c4.metric("Link Margin", f"{margin:.2f} dB")
 
-    link_margin_db = calculate_link_margin(
-        snr_db,
-        required_snr_db
-    )
-
-    link_quality = interpret_link_quality(snr_db)
-
-    # --------------------------------------------------------
-    # WIRELESS LINK RESULTS
-    # --------------------------------------------------------
-
-    st.subheader("Calculated Wireless Link Results")
-
-    col1, col2 = st.columns(2)
-
-    col1.metric(
-        "Free-space path loss",
-        f"{fspl_db:.2f} dB"
-    )
-
-    col2.metric(
-        "Received power",
-        f"{received_power_dbm:.2f} dBm"
-    )
-
-    col3, col4 = st.columns(2)
-
-    col3.metric(
-        "Signal-to-noise ratio",
-        f"{snr_db:.2f} dB"
-    )
-
-    col4.metric(
-        "SNR link margin",
-        f"{link_margin_db:.2f} dB"
+    st.write(
+        "Estimated receiver noise:",
+        f"{noise_power:.2f} dBm"
     )
 
     st.write(
-        "Estimated receiver noise power:",
-        f"{noise_power_dbm:.2f} dBm"
+        "Educational SNR quality:",
+        interpret_link_quality(snr)
     )
 
-    st.write(
-        "Educational SNR interpretation:",
-        link_quality
-    )
-
-    if link_margin_db >= 0:
-
-        st.success(
-            "The assumed SNR requirement is satisfied in this model."
-        )
-
+    if margin >= 0:
+        st.success("Assumed SNR requirement satisfied.")
     else:
-
-        st.warning(
-            "The assumed SNR requirement is not satisfied in this model."
-        )
+        st.warning("Assumed SNR requirement not satisfied.")
 
     st.caption(
-        "This is an educational free-space model with zero "
-        "antenna gains and additional losses. The thresholds "
-        "are illustrative, not aviation communication standards."
+        "Ideal free-space model with zero antenna gains "
+        "and no additional losses. Thresholds are educational."
     )
 
-    # --------------------------------------------------------
-    # WIRELESS LINK GRAPHS
-    # --------------------------------------------------------
-
-    st.subheader("Wireless Link Performance vs Distance")
+    st.subheader("Wireless Performance vs Distance")
 
     graph_distances = list(range(1, 101))
 
     graph_fspl = [
-        calculate_fspl(d, frequency_mhz)
+        calculate_fspl(d, frequency)
         for d in graph_distances
     ]
 
-    graph_received_power = [
+    graph_power = [
         calculate_received_power(
-            transmit_power_dbm,
-            d,
-            frequency_mhz
+            transmit_power, d, frequency
         )
         for d in graph_distances
     ]
 
     graph_snr = [
-        calculate_snr(power, noise_power_dbm)
-        for power in graph_received_power
+        calculate_snr(p, noise_power)
+        for p in graph_power
     ]
 
     graph_margin = [
-        calculate_link_margin(snr, required_snr_db)
-        for snr in graph_snr
+        calculate_link_margin(s, required_snr)
+        for s in graph_snr
     ]
 
-    wireless_graphs = [
-        (
-            "Free-space path loss",
-            graph_fspl,
-            "Path loss (dB)"
-        ),
-        (
-            "Received power",
-            graph_received_power,
-            "Received power (dBm)"
-        ),
-        (
-            "SNR",
-            graph_snr,
-            "SNR (dB)"
-        ),
-        (
-            "Link margin",
-            graph_margin,
-            "Margin (dB)"
-        )
+    graphs = [
+        ("FSPL", graph_fspl, "Path Loss (dB)"),
+        ("Received Power", graph_power, "Power (dBm)"),
+        ("SNR", graph_snr, "SNR (dB)"),
+        ("Link Margin", graph_margin, "Margin (dB)")
     ]
 
-    for graph_title, graph_values, y_label in wireless_graphs:
+    for title, values, y_label in graphs:
 
         fig, ax = plt.subplots(figsize=(9, 4))
+        ax.plot(graph_distances, values)
+        ax.axvline(distance, linestyle="--")
 
-        ax.plot(
-            graph_distances,
-            graph_values,
-            label=graph_title
-        )
+        if title == "Link Margin":
+            ax.axhline(0, linestyle=":")
 
-        ax.axvline(
-            distance_km,
-            linestyle="--",
-            label=f"Selected distance: {distance_km} km"
-        )
-
-        if graph_title == "Link margin":
-
-            ax.axhline(
-                0,
-                linestyle=":",
-                label="Zero margin"
-            )
-
-        ax.set_title(f"{graph_title} vs Distance")
-        ax.set_xlabel("Aircraft-to-ground distance (km)")
+        ax.set_title(f"{title} vs Distance")
+        ax.set_xlabel("Distance (km)")
         ax.set_ylabel(y_label)
-        ax.grid(True, alpha=0.3)
-        ax.legend()
-
-        fig.tight_layout()
+        ax.grid(True)
 
         st.pyplot(fig)
         plt.close(fig)
@@ -692,187 +451,347 @@ elif selected_module == "Wireless Link Analyzer":
 
 elif selected_module == "Network Monitor":
 
-    from modules.network_monitor import simulate_network
-
     st.header("Network Quality Monitor")
 
     st.write(
-        "Simulate data packet delivery between an airport "
-        "ground station and a monitoring center."
+        "Simulate packet delivery between a ground station "
+        "and an airport monitoring center."
     )
 
-    st.subheader("Network Simulation Settings")
-
-    # --------------------------------------------------------
-    # NETWORK INPUT PARAMETERS
-    # --------------------------------------------------------
-
-    num_packets = st.slider(
+    packets = st.slider(
         "Number of packets",
-        min_value=100,
-        max_value=1000,
-        value=100,
-        step=100,
+        100, 1000, 100, step=100,
         key="network_packets"
     )
 
-    base_latency_ms = st.slider(
+    latency = st.slider(
         "Base one-way latency (ms)",
-        min_value=10,
-        max_value=200,
-        value=40,
+        10, 200, 40,
         key="network_latency"
     )
 
-    jitter_std_ms = st.slider(
-        "Delay variation standard deviation (ms)",
-        min_value=0,
-        max_value=100,
-        value=10,
-        key="network_jitter_std"
+    delay_std = st.slider(
+        "Delay variation (ms)",
+        0, 100, 10,
+        key="network_delay_std"
     )
 
-    loss_percent = st.slider(
+    loss = st.slider(
         "Packet loss probability (%)",
-        min_value=0,
-        max_value=30,
-        value=2,
+        0, 30, 2,
         key="network_loss"
     )
 
-    duration_seconds = st.slider(
+    duration = st.slider(
         "Observation duration (seconds)",
-        min_value=1,
-        max_value=60,
-        value=10,
+        1, 60, 10,
         key="network_duration"
     )
 
-    packet_size_bytes = st.number_input(
+    packet_size = st.number_input(
         "Packet size (bytes)",
         min_value=1,
         value=1000,
-        step=100,
         key="network_packet_size"
     )
 
-    # --------------------------------------------------------
-    # RUN NETWORK SIMULATION
-    # --------------------------------------------------------
-
     if st.button(
         "Run Network Simulation",
-        key="run_network_simulation"
+        key="network_run"
     ):
 
-        results = simulate_network(
-            num_packets=num_packets,
-            base_latency_ms=base_latency_ms,
-            jitter_std_ms=jitter_std_ms,
-            loss_probability=loss_percent / 100,
-            packet_size_bytes=packet_size_bytes,
-            duration_seconds=duration_seconds
+        result = simulate_network(
+            num_packets=packets,
+            base_latency_ms=latency,
+            jitter_std_ms=delay_std,
+            loss_probability=loss / 100,
+            packet_size_bytes=packet_size,
+            duration_seconds=duration
         )
 
-        st.subheader("Network Performance Results")
+        st.subheader("Network Performance")
 
-        # ----------------------------------------------------
-        # PERFORMANCE METRICS
-        # ----------------------------------------------------
-
-        col1, col2 = st.columns(2)
-
-        col1.metric(
+        c1, c2 = st.columns(2)
+        c1.metric(
             "Average Latency",
-            f"{results['average_latency_ms']:.2f} ms"
+            f"{result['average_latency_ms']:.2f} ms"
         )
-
-        col2.metric(
+        c2.metric(
             "Jitter",
-            f"{results['jitter_ms']:.2f} ms"
+            f"{result['jitter_ms']:.2f} ms"
         )
 
-        col3, col4 = st.columns(2)
-
-        col3.metric(
+        c3, c4 = st.columns(2)
+        c3.metric(
             "Packet Loss",
-            f"{results['packet_loss_percent']:.2f}%"
+            f"{result['packet_loss_percent']:.2f}%"
         )
-
-        col4.metric(
+        c4.metric(
             "Throughput",
-            f"{results['throughput_mbps']:.4f} Mbps"
+            f"{result['throughput_mbps']:.4f} Mbps"
         )
 
-        st.write(
-            "Packets sent:",
-            results["packets_sent"]
+        st.write("Sent:", result["packets_sent"])
+        st.write("Received:", result["packets_received"])
+        st.write("Lost:", result["packets_lost"])
+
+        delays = result["received_delays"]
+
+        if delays:
+            fig, ax = plt.subplots(figsize=(9, 4))
+            ax.plot(delays)
+            ax.set_title("Simulated Packet Delay")
+            ax.set_xlabel("Received Packet Index")
+            ax.set_ylabel("Delay (ms)")
+            ax.grid(True)
+
+            st.pyplot(fig)
+            plt.close(fig)
+        else:
+            st.warning("No packets were received.")
+
+        st.caption(
+            "Synthetic packet network model, not live monitoring."
         )
 
-        st.write(
-            "Packets received:",
-            results["packets_received"]
-        )
 
-        st.write(
-            "Packets lost:",
-            results["packets_lost"]
-        )
+# ============================================================
+# MODULE 4: AIRCRAFT SURVEILLANCE SIMULATOR
+# ============================================================
 
-        # ----------------------------------------------------
-        # PACKET DELAY GRAPH
-        # ----------------------------------------------------
+elif selected_module == "Aircraft Surveillance Simulator":
 
-        st.subheader("Packet Delay Visualization")
+    st.header("Aircraft Surveillance Simulator")
 
-        delays = results["received_delays"]
+    st.info(
+        "This module generates synthetic aircraft data. "
+        "It does not receive actual radar or ADS-B signals."
+    )
 
-        if len(delays) > 0:
+    # --------------------------------------------------------
+    # EXPERIMENT 1: AIRCRAFT INFORMATION
+    # --------------------------------------------------------
 
+    st.subheader("Experiment 1: Aircraft Information")
+
+    aircraft_id = st.text_input(
+        "Aircraft Identifier",
+        value="AN101",
+        key="aircraft_id"
+    )
+
+    latitude = st.number_input(
+        "Initial Latitude",
+        min_value=-90.0,
+        max_value=90.0,
+        value=27.70,
+        format="%.5f",
+        key="aircraft_lat"
+    )
+
+    longitude = st.number_input(
+        "Initial Longitude",
+        min_value=-180.0,
+        max_value=180.0,
+        value=85.35,
+        format="%.5f",
+        key="aircraft_lon"
+    )
+
+    altitude = st.number_input(
+        "Altitude (meters)",
+        min_value=0,
+        max_value=20000,
+        value=3000,
+        key="aircraft_alt"
+    )
+
+    speed = st.slider(
+        "Ground Speed (km/h)",
+        0, 900, 360, step=10,
+        key="aircraft_speed"
+    )
+
+    heading = st.slider(
+        "Track Direction (degrees)",
+        0, 359, 90,
+        key="aircraft_heading"
+    )
+
+    st.caption(
+        "0° = North, 90° = East, "
+        "180° = South, 270° = West."
+    )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # EXPERIMENT 2: AIRCRAFT MOVEMENT
+    # --------------------------------------------------------
+
+    st.subheader("Experiment 2: Aircraft Movement")
+
+    time_step = st.slider(
+        "Update Interval (seconds)",
+        5, 60, 10, step=5,
+        key="aircraft_time_step"
+    )
+
+    updates = st.slider(
+        "Number of Updates",
+        1, 30, 6,
+        key="aircraft_updates"
+    )
+
+    total_seconds = time_step * updates
+    travel_distance = speed * total_seconds / 3600
+
+    st.write("Simulation duration:", total_seconds, "seconds")
+    st.write(
+        "Travel distance:",
+        f"{travel_distance:.2f} km"
+    )
+
+    if st.button(
+        "Simulate Aircraft Movement",
+        key="aircraft_simulate"
+    ):
+
+        try:
+            aircraft = create_aircraft(
+                aircraft_id=aircraft_id,
+                latitude=latitude,
+                longitude=longitude,
+                altitude_m=altitude,
+                speed_kmh=speed,
+                heading_deg=heading
+            )
+
+            trajectory = []
+
+            # Include initial position and each update
+            for step in range(updates + 1):
+
+                if step > 0:
+                    aircraft = update_aircraft_position(
+                        aircraft,
+                        time_step
+                    )
+
+                trajectory.append({
+                    "time_seconds": step * time_step,
+                    "aircraft_id": aircraft["aircraft_id"],
+                    "latitude": aircraft["latitude"],
+                    "longitude": aircraft["longitude"],
+                    "altitude_m": aircraft["altitude_m"],
+                    "speed_kmh": aircraft["speed_kmh"],
+                    "heading_deg": aircraft["heading_deg"]
+                })
+
+            trajectory_df = pd.DataFrame(trajectory)
+
+            # ------------------------------------------------
+            # EXPERIMENT 3: TRACKING RESULTS
+            # ------------------------------------------------
+
+            st.divider()
+            st.subheader("Experiment 3: Tracking Results")
+
+            c1, c2, c3 = st.columns(3)
+
+            c1.metric("Aircraft ID", aircraft_id)
+            c2.metric("Ground Speed", f"{speed} km/h")
+            c3.metric("Track Direction", f"{heading}°")
+
+            c4, c5, c6 = st.columns(3)
+            c4.metric("Altitude", f"{altitude} m")
+            c5.metric(
+                "Travel Distance",
+                f"{travel_distance:.2f} km"
+            )
+            c6.metric(
+                "Elapsed Time",
+                f"{total_seconds} sec"
+            )
+
+            st.write(
+                "Final latitude:",
+                f"{aircraft['latitude']:.5f}°"
+            )
+            st.write(
+                "Final longitude:",
+                f"{aircraft['longitude']:.5f}°"
+            )
+
+            # ------------------------------------------------
+            # EXPERIMENT 4: POSITION VISUALIZATION
+            # ------------------------------------------------
+
+            st.divider()
+            st.subheader("Experiment 4: Aircraft Positions")
+
+            st.map(
+                trajectory_df,
+                latitude="latitude",
+                longitude="longitude"
+            )
+
+            st.subheader("Position Update History")
+            st.dataframe(
+                trajectory_df,
+                use_container_width=True
+            )
+
+            # Latitude vs time
             fig, ax = plt.subplots(figsize=(9, 4))
 
             ax.plot(
-                range(1, len(delays) + 1),
-                delays,
-                label="Received Packet Delay"
+                trajectory_df["time_seconds"],
+                trajectory_df["latitude"],
+                "o-"
             )
-
-            ax.set_title(
-                "Simulated One-way Packet Delay"
-            )
-
-            ax.set_xlabel("Received Packet Index")
-            ax.set_ylabel("Packet Delay (ms)")
+            ax.set_title("Aircraft Latitude vs Time")
+            ax.set_xlabel("Elapsed Time (seconds)")
+            ax.set_ylabel("Latitude")
             ax.grid(True)
-            ax.legend()
-
-            fig.tight_layout()
 
             st.pyplot(fig)
             plt.close(fig)
 
-        else:
+            # Longitude vs time
+            fig, ax = plt.subplots(figsize=(9, 4))
 
-            st.warning(
-                "No packets were received during this simulation."
+            ax.plot(
+                trajectory_df["time_seconds"],
+                trajectory_df["longitude"],
+                "o-"
+            )
+            ax.set_title("Aircraft Longitude vs Time")
+            ax.set_xlabel("Elapsed Time (seconds)")
+            ax.set_ylabel("Longitude")
+            ax.grid(True)
+
+            st.pyplot(fig)
+            plt.close(fig)
+
+            st.success("Aircraft simulation completed.")
+
+            st.caption(
+                "Constant-speed, constant-direction movement "
+                "with approximate geographic updates. "
+                "This is not live aircraft tracking."
             )
 
-        st.caption(
-            "The Network Quality Monitor generates simulated "
-            "packet delays and losses. It does not measure "
-            "real airport network traffic. Jitter is calculated "
-            "as mean absolute delay variation, and throughput "
-            "uses successfully delivered payload bits divided "
-            "by the observation duration."
-        )
+        except ValueError as error:
+            st.error(f"Invalid aircraft settings: {error}")
 
 
 # ============================================================
-# OTHER ENGINEERING MODULES
+# MODULE 5: RELIABILITY AND FAILOVER
 # ============================================================
 
 else:
-
+    st.header("Reliability and Failover")
     st.info(
-        f"{selected_module} is currently under development."
+        "This engineering module is currently under development."
     )
