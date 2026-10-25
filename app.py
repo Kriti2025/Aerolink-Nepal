@@ -4,10 +4,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# ============================================================
-# IMPORT EXISTING SIMULATION FUNCTIONS
-# ============================================================
-
 from modules.fec_awgn_experiment import run_fec_awgn
 from modules.ber_snr_analysis_new import run_ber_snr_analysis
 
@@ -33,7 +29,10 @@ from modules.reliability import (
     plot_failover_timeline,
 )
 
-from modules.integrated_simulation import run_integrated_simulation
+from modules.integrated_simulation import (
+    run_integrated_simulation,
+    plot_integrated_results,
+)
 
 
 # ============================================================
@@ -52,10 +51,10 @@ st.subheader(
     "Airport Communication & Surveillance Network Simulator"
 )
 
-st.info("Version 0.1 | Educational Engineering Simulation")
+st.info("Version 0.2 | Educational Engineering Simulation")
 
 st.write(
-    "Explore digital communication, radio propagation, "
+    "Explore digital communication, wireless propagation, "
     "network quality, aircraft surveillance, reliability, "
     "and integrated system performance."
 )
@@ -90,8 +89,8 @@ if selected_module == "Digital Communication":
     st.header("Digital Communication Simulator")
 
     st.write(
-        "Study BPSK modulation, AWGN, BER and "
-        "Forward Error Correction."
+        "Study BPSK modulation, AWGN noise, "
+        "Bit Error Rate and Forward Error Correction."
     )
 
     # --------------------------------------------------------
@@ -119,7 +118,10 @@ if selected_module == "Digital Communication":
         symbols = 2 * bits - 1
 
         ebn0_linear = 10 ** (ebn0_db / 10)
-        noise_std = np.sqrt(1 / (2 * ebn0_linear))
+
+        noise_std = np.sqrt(
+            1 / (2 * ebn0_linear)
+        )
 
         noise = np.random.normal(
             0, noise_std, num_bits
@@ -128,7 +130,10 @@ if selected_module == "Digital Communication":
         received = symbols + noise
         detected = (received > 0).astype(int)
 
-        errors = int(np.count_nonzero(bits != detected))
+        errors = int(
+            np.count_nonzero(bits != detected)
+        )
+
         ber = errors / num_bits
 
         c1, c2, c3 = st.columns(3)
@@ -160,6 +165,7 @@ if selected_module == "Digital Communication":
         ax.set_title("BPSK Through AWGN")
         ax.set_xlabel("Symbol Index")
         ax.set_ylabel("Amplitude")
+
         ax.grid(True)
         ax.legend()
 
@@ -206,10 +212,25 @@ if selected_module == "Digital Communication":
             f"{result['decoded_ber']:.6f}",
         )
 
-        st.write("Information bits:", result["num_bits"])
-        st.write("Coded bits:", result["coded_bits"])
-        st.write("Coded-bit errors:", result["coded_errors"])
-        st.write("Errors after FEC:", result["decoded_errors"])
+        st.write(
+            "Information bits:",
+            result["num_bits"]
+        )
+
+        st.write(
+            "Coded bits:",
+            result["coded_bits"]
+        )
+
+        st.write(
+            "Coded-bit errors:",
+            result["coded_errors"]
+        )
+
+        st.write(
+            "Errors after FEC:",
+            result["decoded_errors"]
+        )
 
         fig, ax = plt.subplots(figsize=(8, 4))
 
@@ -223,14 +244,16 @@ if selected_module == "Digital Communication":
 
         ax.set_title("BER Before and After FEC")
         ax.set_ylabel("Bit Error Rate")
+
         ax.grid(True, axis="y", alpha=0.3)
 
         st.pyplot(fig)
         plt.close(fig)
 
         st.caption(
-            "These BER values have different denominators "
-            "and do not alone demonstrate energy-efficiency gain."
+            "These BER measurements have different "
+            "denominators and do not alone demonstrate "
+            "an energy-efficiency improvement."
         )
 
     st.divider()
@@ -258,11 +281,13 @@ if selected_module == "Digital Communication":
             st.error("Enter only binary digits 0 and 1.")
 
         else:
+
             original = np.array([
                 int(ch) for ch in message
             ])
 
             encoded = np.repeat(original, 3)
+
             received = encoded.copy()
 
             received[1::3] ^= 1
@@ -272,14 +297,17 @@ if selected_module == "Digital Communication":
             ).astype(int)
 
             st.write("Original:", message)
+
             st.write(
                 "Encoded:",
                 "".join(map(str, encoded)),
             )
+
             st.write(
                 "Received:",
                 "".join(map(str, received)),
             )
+
             st.write(
                 "Decoded:",
                 "".join(map(str, decoded)),
@@ -332,17 +360,19 @@ if selected_module == "Digital Communication":
         snr_array = np.asarray(snr_values, dtype=float)
         ber_array = np.asarray(ber_values, dtype=float)
 
-        fig, ax = plt.subplots(figsize=(9, 4))
-
         valid = ber_array > 0
 
+        fig, ax = plt.subplots(figsize=(9, 4))
+
         if np.any(valid):
+
             ax.semilogy(
                 snr_array[valid],
                 ber_array[valid],
                 "o-",
                 label="Simulated BER",
             )
+
             ax.legend()
 
         else:
@@ -351,6 +381,7 @@ if selected_module == "Digital Communication":
         ax.set_title("BER vs Eb/N0")
         ax.set_xlabel("Eb/N0 (dB)")
         ax.set_ylabel("Bit Error Rate")
+
         ax.grid(True, which="both")
 
         st.pyplot(fig)
@@ -366,7 +397,8 @@ elif selected_module == "Wireless Link Analyzer":
     st.header("Wireless Channel Analyzer")
 
     st.write(
-        "Analyze an idealized aircraft-to-ground radio link."
+        "Analyze an idealized aircraft-to-ground "
+        "radio communication link."
     )
 
     distance = st.slider(
@@ -407,47 +439,68 @@ elif selected_module == "Wireless Link Analyzer":
         key="wireless_required_snr",
     )
 
-    fspl = calculate_fspl(distance, frequency)
+    # WIRELESS CALCULATIONS
+
+    fspl = calculate_fspl(
+        distance,
+        frequency
+    )
 
     received_power = calculate_received_power(
-        transmit_power, distance, frequency
+        transmit_power,
+        distance,
+        frequency
     )
 
     noise_power = calculate_noise_power(
-        bandwidth, noise_figure
+        bandwidth,
+        noise_figure
     )
 
     snr = calculate_snr(
-        received_power, noise_power
+        received_power,
+        noise_power
     )
 
     margin = calculate_link_margin(
-        snr, required_snr
+        snr,
+        required_snr
     )
 
     st.subheader("Wireless Link Results")
 
     c1, c2 = st.columns(2)
 
-    c1.metric("FSPL", f"{fspl:.2f} dB")
+    c1.metric(
+        "FSPL",
+        f"{fspl:.2f} dB"
+    )
+
     c2.metric(
         "Received Power",
-        f"{received_power:.2f} dBm",
+        f"{received_power:.2f} dBm"
     )
 
     c3, c4 = st.columns(2)
 
-    c3.metric("SNR", f"{snr:.2f} dB")
-    c4.metric("Link Margin", f"{margin:.2f} dB")
+    c3.metric(
+        "SNR",
+        f"{snr:.2f} dB"
+    )
+
+    c4.metric(
+        "Link Margin",
+        f"{margin:.2f} dB"
+    )
 
     st.write(
         "Estimated receiver noise:",
-        f"{noise_power:.2f} dBm",
+        f"{noise_power:.2f} dBm"
     )
 
     st.write(
         "Educational SNR quality:",
-        interpret_link_quality(snr),
+        interpret_link_quality(snr)
     )
 
     if margin >= 0:
@@ -457,7 +510,7 @@ elif selected_module == "Wireless Link Analyzer":
 
     st.caption(
         "Ideal free-space model with zero antenna gains "
-        "and zero additional losses. Thresholds are illustrative."
+        "and additional losses. Thresholds are illustrative."
     )
 
     st.subheader("Wireless Performance vs Distance")
@@ -471,7 +524,9 @@ elif selected_module == "Wireless Link Analyzer":
 
     graph_power = [
         calculate_received_power(
-            transmit_power, d, frequency
+            transmit_power,
+            d,
+            frequency
         )
         for d in graph_distances
     ]
@@ -519,6 +574,7 @@ elif selected_module == "Wireless Link Analyzer":
         ax.set_title(f"{title} vs Distance")
         ax.set_xlabel("Distance (km)")
         ax.set_ylabel(label)
+
         ax.grid(True)
         ax.legend()
 
@@ -595,39 +651,53 @@ elif selected_module == "Network Monitor":
 
         c1.metric(
             "Average Latency",
-            f"{result['average_latency_ms']:.2f} ms",
+            f"{result['average_latency_ms']:.2f} ms"
         )
 
         c2.metric(
             "Jitter",
-            f"{result['jitter_ms']:.2f} ms",
+            f"{result['jitter_ms']:.2f} ms"
         )
 
         c3, c4 = st.columns(2)
 
         c3.metric(
             "Packet Loss",
-            f"{result['packet_loss_percent']:.2f}%",
+            f"{result['packet_loss_percent']:.2f}%"
         )
 
         c4.metric(
             "Throughput",
-            f"{result['throughput_mbps']:.4f} Mbps",
+            f"{result['throughput_mbps']:.4f} Mbps"
         )
 
-        st.write("Sent:", result["packets_sent"])
-        st.write("Received:", result["packets_received"])
-        st.write("Lost:", result["packets_lost"])
+        st.write(
+            "Sent:",
+            result["packets_sent"]
+        )
+
+        st.write(
+            "Received:",
+            result["packets_received"]
+        )
+
+        st.write(
+            "Lost:",
+            result["packets_lost"]
+        )
 
         delays = result["received_delays"]
 
         if delays:
+
             fig, ax = plt.subplots(figsize=(9, 4))
+
             ax.plot(delays)
 
             ax.set_title("Simulated Packet Delay")
             ax.set_xlabel("Received Packet Index")
             ax.set_ylabel("Delay (ms)")
+
             ax.grid(True)
 
             st.pyplot(fig)
@@ -637,7 +707,8 @@ elif selected_module == "Network Monitor":
             st.warning("No packets were received.")
 
         st.caption(
-            "Synthetic packet network, not live monitoring."
+            "Synthetic packet-network simulation, "
+            "not live airport network monitoring."
         )
 
 
@@ -650,8 +721,8 @@ elif selected_module == "Aircraft Surveillance Simulator":
     st.header("Aircraft Surveillance Simulator")
 
     st.info(
-        "This module generates synthetic aircraft positions, "
-        "not real radar or ADS-B data."
+        "Synthetic aircraft positions rather than "
+        "real radar or ADS-B data."
     )
 
     st.subheader("Experiment 1: Aircraft Information")
@@ -718,16 +789,19 @@ elif selected_module == "Aircraft Surveillance Simulator":
     )
 
     total_seconds = time_step * updates
-    travel_distance = speed * total_seconds / 3600
+
+    travel_distance = (
+        speed * total_seconds / 3600
+    )
 
     st.write(
         "Simulation Duration:",
-        f"{total_seconds} seconds",
+        f"{total_seconds} seconds"
     )
 
     st.write(
         "Expected Travel Distance:",
-        f"{travel_distance:.2f} km",
+        f"{travel_distance:.2f} km"
     )
 
     if st.button(
@@ -736,6 +810,7 @@ elif selected_module == "Aircraft Surveillance Simulator":
     ):
 
         try:
+
             aircraft = create_aircraft(
                 aircraft_id=aircraft_id,
                 latitude=latitude,
@@ -751,7 +826,8 @@ elif selected_module == "Aircraft Surveillance Simulator":
 
                 if step > 0:
                     aircraft = update_aircraft_position(
-                        aircraft, time_step
+                        aircraft,
+                        time_step
                     )
 
                 trajectory.append({
@@ -771,31 +847,42 @@ elif selected_module == "Aircraft Surveillance Simulator":
             c1, c2, c3 = st.columns(3)
 
             c1.metric("Aircraft ID", aircraft_id)
-            c2.metric("Ground Speed", f"{speed} km/h")
-            c3.metric("Track Direction", f"{heading}°")
+
+            c2.metric(
+                "Ground Speed",
+                f"{speed} km/h"
+            )
+
+            c3.metric(
+                "Track Direction",
+                f"{heading}°"
+            )
 
             c4, c5, c6 = st.columns(3)
 
-            c4.metric("Altitude", f"{altitude} m")
+            c4.metric(
+                "Altitude",
+                f"{altitude} m"
+            )
 
             c5.metric(
                 "Travel Distance",
-                f"{travel_distance:.2f} km",
+                f"{travel_distance:.2f} km"
             )
 
             c6.metric(
                 "Elapsed Time",
-                f"{total_seconds} s",
+                f"{total_seconds} s"
             )
 
             st.write(
                 "Final Latitude:",
-                f"{aircraft['latitude']:.5f}°",
+                f"{aircraft['latitude']:.5f}°"
             )
 
             st.write(
                 "Final Longitude:",
-                f"{aircraft['longitude']:.5f}°",
+                f"{aircraft['longitude']:.5f}°"
             )
 
             st.subheader("Experiment 4: Aircraft Positions")
@@ -815,6 +902,7 @@ elif selected_module == "Aircraft Surveillance Simulator":
                 ("latitude", "Latitude"),
                 ("longitude", "Longitude"),
             ]:
+
                 fig, ax = plt.subplots(figsize=(9, 4))
 
                 ax.plot(
@@ -823,22 +911,29 @@ elif selected_module == "Aircraft Surveillance Simulator":
                     "o-",
                 )
 
-                ax.set_title(f"Aircraft {label} vs Time")
+                ax.set_title(
+                    f"Aircraft {label} vs Time"
+                )
+
                 ax.set_xlabel("Time (seconds)")
                 ax.set_ylabel(label)
+
                 ax.grid(True)
 
                 st.pyplot(fig)
                 plt.close(fig)
 
-            st.success("Aircraft simulation completed.")
+            st.success(
+                "Aircraft simulation completed."
+            )
 
             st.caption(
-                "Constant speed, direction and altitude; "
-                "approximate geographic position updates."
+                "Constant speed, heading, and altitude; "
+                "approximate geographic updates."
             )
 
         except ValueError as error:
+
             st.error(
                 f"Invalid aircraft settings: {error}"
             )
@@ -878,17 +973,33 @@ elif selected_module == "Reliability and Failover":
 
     c1, c2 = st.columns(2)
 
-    c1.metric("Active Link", selection["active_link"])
-    c2.metric("System Status", selection["status"])
+    c1.metric(
+        "Active Link",
+        selection["active_link"]
+    )
+
+    c2.metric(
+        "System Status",
+        selection["status"]
+    )
 
     if selection["status"] == "Communication Unavailable":
-        st.error("Neither communication link is available.")
+
+        st.error(
+            "Neither communication link is available."
+        )
 
     elif selection["status"] == "Failover Active":
-        st.warning("Primary failed; backup link selected.")
+
+        st.warning(
+            "Primary failed; backup link selected."
+        )
 
     else:
-        st.success("Primary link is operational.")
+
+        st.success(
+            "Primary link is operational."
+        )
 
     st.divider()
 
@@ -897,8 +1008,8 @@ elif selected_module == "Reliability and Failover":
     )
 
     st.caption(
-        "This recovery experiment assumes the backup "
-        "link is available independently of the checkboxes."
+        "This separate recovery experiment assumes "
+        "the backup link is available."
     )
 
     total_time = st.slider(
@@ -936,32 +1047,34 @@ elif selected_module == "Reliability and Failover":
 
         c1.metric(
             "Communication Downtime",
-            f"{result['downtime']:.2f} s",
+            f"{result['downtime']:.2f} s"
         )
 
         c2.metric(
             "Observed Availability",
-            f"{result['availability']:.2f}%",
+            f"{result['availability']:.2f}%"
         )
 
         c3, c4 = st.columns(2)
 
         c3.metric(
             "Failure Time",
-            f"{result['failure_time']} s",
+            f"{result['failure_time']} s"
         )
 
         c4.metric(
             "Backup Recovery Time",
-            f"{result['recovery_time']} s",
+            f"{result['recovery_time']} s"
         )
 
         st.write(
             "Communication Uptime:",
-            f"{result['uptime']:.2f} seconds",
+            f"{result['uptime']:.2f} seconds"
         )
 
-        st.subheader("Experiment 3: Failover Timeline")
+        st.subheader(
+            "Experiment 3: Failover Timeline"
+        )
 
         fig = plot_failover_timeline(result)
 
@@ -969,39 +1082,108 @@ elif selected_module == "Reliability and Failover":
         plt.close(fig)
 
         st.caption(
-            "Deterministic educational simulation. "
-            "Observed availability is for the selected "
-            "simulation period, not long-term reliability."
+            "Deterministic educational model. "
+            "Observed availability is not long-term reliability."
         )
 
 
 # ============================================================
-# MODULE 6: INTEGRATED SYSTEM SIMULATION
+# MODULE 6: COMPLETE INTEGRATED SYSTEM SIMULATION
 # ============================================================
 
 elif selected_module == "Integrated System Simulation":
 
-    st.header("Integrated Aircraft-Wireless Simulation")
+    st.header("Integrated Communication and Surveillance")
 
     st.write(
-        "This module connects aircraft movement with "
-        "wireless communication calculations."
+        "Study aircraft movement, 3D slant range, "
+        "wireless propagation, BPSK error probability, "
+        "packet delivery, and failover."
     )
 
     st.info(
-        "The simulation uses a fixed ground station, "
-        "horizontal aircraft distance, and an ideal "
-        "free-space propagation model. Aircraft altitude "
-        "is not yet included in propagation distance."
+        "This is an educational synthetic model. "
+        "The results do not represent live airport data. "
+        "Assumptions include independent bit errors, "
+        "simplified receiver noise, and a working backup link."
     )
 
+    # --------------------------------------------------------
+    # SIMULATION SETTINGS
+    # --------------------------------------------------------
+
+    st.subheader("Simulation Settings")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        time_step = st.slider(
+            "Update Interval (seconds)",
+            1, 20, 5,
+            key="integrated_time_step",
+        )
+
+        number_updates = st.slider(
+            "Number of Updates",
+            5, 60, 12,
+            key="integrated_updates",
+        )
+
+        attenuation = st.slider(
+            "Additional Attenuation (dB)",
+            0, 80, 50,
+            key="integrated_attenuation",
+        )
+
+    with col2:
+
+        failure_time = st.slider(
+            "Primary Failure Time (seconds)",
+            0,
+            time_step * number_updates,
+            min(30, time_step * number_updates),
+            key="integrated_failure_time",
+        )
+
+        backup_delay = st.slider(
+            "Backup Activation Delay (seconds)",
+            0, 30, 5,
+            key="integrated_backup_delay",
+        )
+
+        packets_per_update = st.slider(
+            "Packets Per Update",
+            10, 1000, 100,
+            step=10,
+            key="integrated_packets",
+        )
+
+    st.caption(
+        "The radio model uses a fixed ground station, "
+        "constant aircraft motion, theoretical coherent "
+        "BPSK BER, and a configurable attenuation value."
+    )
+
+    # --------------------------------------------------------
+    # RUN COMPLETE INTEGRATED EXPERIMENTS
+    # --------------------------------------------------------
+
     if st.button(
-        "Run Integrated Simulation",
-        key="run_integrated",
+        "Run Complete Integrated Simulation",
+        key="run_complete_integrated",
     ):
 
         try:
-            results = run_integrated_simulation()
+
+            results = run_integrated_simulation(
+                time_step=time_step,
+                number_updates=number_updates,
+                additional_attenuation_db=attenuation,
+                primary_failure_time=failure_time,
+                backup_activation_delay=backup_delay,
+                packets_per_update=packets_per_update,
+            )
 
             df = pd.DataFrame(results)
 
@@ -1013,43 +1195,101 @@ elif selected_module == "Integrated System Simulation":
                 "fspl_db",
                 "received_power_dbm",
                 "snr_db",
+                "active_link",
+                "packets_sent",
+                "packets_received",
+                "packets_lost",
+                "packet_loss_percent",
             ]
 
             if df.empty or any(
                 column not in df.columns
                 for column in required_columns
             ):
+
                 st.error(
                     "The integrated simulation did not "
-                    "return valid records."
+                    "return the expected results."
                 )
 
             else:
-                st.subheader("Integrated Simulation Results")
+
+                st.success(
+                    "Integrated simulation completed!"
+                )
+
+                # ------------------------------------------------
+                # PACKET SUMMARY
+                # ------------------------------------------------
+
+                total_sent = int(
+                    df["packets_sent"].sum()
+                )
+
+                total_received = int(
+                    df["packets_received"].sum()
+                )
+
+                total_lost = int(
+                    df["packets_lost"].sum()
+                )
+
+                delivery_percent = (
+                    100 * total_received / total_sent
+                )
+
+                st.subheader(
+                    "Aircraft and Communication Results"
+                )
 
                 c1, c2, c3 = st.columns(3)
 
                 c1.metric(
-                    "Final Aircraft Distance",
+                    "Final Slant Range",
                     f"{df['distance_km'].iloc[-1]:.2f} km",
                 )
 
                 c2.metric(
-                    "Final Received Power",
-                    f"{df['received_power_dbm'].iloc[-1]:.2f} dBm",
+                    "Packets Received",
+                    total_received,
                 )
 
                 c3.metric(
-                    "Final SNR",
-                    f"{df['snr_db'].iloc[-1]:.2f} dB",
+                    "Overall Packet Delivery",
+                    f"{delivery_percent:.2f}%",
                 )
 
-                st.subheader("Results Table")
+                c4, c5, c6 = st.columns(3)
+
+                c4.metric(
+                    "Packets Sent",
+                    total_sent,
+                )
+
+                c5.metric(
+                    "Packets Lost",
+                    total_lost,
+                )
+
+                c6.metric(
+                    "Backup Activation",
+                    f"{failure_time + backup_delay} s",
+                )
+
+                # ------------------------------------------------
+                # RESULTS TABLE
+                # ------------------------------------------------
+
+                st.subheader("Engineering Results Table")
 
                 st.dataframe(
                     df,
                     use_container_width=True,
                 )
+
+                # ------------------------------------------------
+                # AIRCRAFT MAP
+                # ------------------------------------------------
 
                 st.subheader("Aircraft Position Map")
 
@@ -1060,64 +1300,64 @@ elif selected_module == "Integrated System Simulation":
                 )
 
                 # ------------------------------------------------
-                # INTEGRATED PERFORMANCE GRAPHS
+                # INTEGRATED GRAPHS
                 # ------------------------------------------------
 
-                st.subheader("Wireless Performance Over Time")
+                st.subheader(
+                    "Integrated Performance Graphs"
+                )
 
-                graphs = [
-                    (
-                        "Aircraft Distance vs Time",
-                        "distance_km",
-                        "Distance (km)",
-                    ),
-                    (
-                        "Free-Space Path Loss vs Time",
-                        "fspl_db",
-                        "FSPL (dB)",
-                    ),
-                    (
-                        "Received Power vs Time",
-                        "received_power_dbm",
-                        "Power (dBm)",
-                    ),
-                    (
-                        "SNR vs Time",
-                        "snr_db",
-                        "SNR (dB)",
-                    ),
-                ]
+                figures = plot_integrated_results(results)
 
-                for title, field, ylabel in graphs:
-
-                    fig, ax = plt.subplots(figsize=(9, 4))
-
-                    ax.plot(
-                        df["time_seconds"],
-                        df[field],
-                        marker="o",
-                    )
-
-                    ax.set_title(title)
-                    ax.set_xlabel("Time (seconds)")
-                    ax.set_ylabel(ylabel)
-                    ax.grid(True)
+                for fig in figures:
 
                     st.pyplot(fig)
                     plt.close(fig)
 
-                st.success(
-                    "Integrated aircraft and wireless "
-                    "simulation completed."
-                )
-
                 st.caption(
-                    "Synthetic aircraft movement with fixed "
-                    "transmission power and noise, using ideal "
-                    "free-space propagation. Not live flight data."
+                    "Packet delivery is sampled at discrete "
+                    "simulation updates. The model does not "
+                    "yet include continuous packet traffic "
+                    "or realistic network latency and jitter."
                 )
 
-        except (ValueError, KeyError, TypeError) as error:
+                # ------------------------------------------------
+                # ENGINEERING INTERPRETATION
+                # ------------------------------------------------
+
+                st.subheader("Engineering Interpretation")
+
+                st.write(
+                    "Aircraft movement changes the estimated "
+                    "slant range, free-space path loss, "
+                    "received power, and SNR."
+                )
+
+                st.write(
+                    "The theoretical BPSK model estimates "
+                    "bit-error probability from an assumed "
+                    "relationship between SNR and Eb/N0."
+                )
+
+                st.write(
+                    "The packet model uses the estimated "
+                    "error probability to simulate successful "
+                    "and unsuccessful packet delivery."
+                )
+
+                st.write(
+                    "During the simulated failover interruption, "
+                    "packets at unavailable observation points "
+                    "are not delivered."
+                )
+
+        except (
+            ValueError,
+            TypeError,
+            KeyError,
+            ImportError,
+        ) as error:
+
             st.error(
                 f"Integrated simulation error: {error}"
             )
